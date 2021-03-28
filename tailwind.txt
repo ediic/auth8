@@ -1,0 +1,53 @@
+npm init - formeaza failul package.json, urmareste dependentele
+npm install tailwindcss - apare ca dependenta in package.json si se instaleaza in node_modules
+
+Cream doua mape 'src' si 'public', in 'src' cream styles.css, in acest file scrim:
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+apoi ne ducem in package.json si scrim:
+"scripts": {
+  "build-css": "tailwindcss build src/styles.css -o public/styles.css"
+}
+
+npm run build-css - formeaza failul styles.css in mapa public cu toate clasele tailwind
+
+
+npx tailwindcss init --full - formeaza failul tailwind.config.js in root. 
+ Aici este toata configuratia(sursa) unde putem customiza, introduce stilul nostru
+
+npm run build-css - reformeaza failul style.css din public cu clasa noua formata de noi, care o putem folosi.
+
+Dar e mai bine sa cream un fail aparte unde introducem clasele noastre.
+Schimbam denumirea tailwind.config.js -> tailwind-default.config.js(nu conteaza denumirea, sa nu fie tailwind.config.js) 
+si acum cind facem 'npm run build-css' nu mai foloseste tailwind.config.js, dar il foloseste pe cel default.
+
+Acum cream un fail gol tailwind.config.js: npx tailwindcss init
+In acest fail 'tailwind.config.js' in extend cream clasele noastre. 
+Ne uitam in tailwind-default.config.js cum sint create clasele(sa ne fie mai usor) si le facem in 'tailwind.config.js' sub extend.
+Ex:
+theme: {
+  extend: {
+    colors: {
+      primary: '#FF6363'
+    }
+  },
+},
+
+npm run build-css - facem rebuild unde se va contine clasele default si cele facute de noi.
+Folosim clasa noastra: class="text-primary" sau class="bg-primary"
+
+----
+Ca sa grupam mai multe clase in una, cream clasa noastra in src/styles.css si scrim directiva @apply, 
+dupa care adaugam clasele noastre. Sa nu uitam sa facem rebuild.
+EX:
+.card{
+  @apply bg-white rounded overflow-hidden relative;
+}
+
+
+min-h-screen - sa arate tot ecranul
+
+flex-1 - sa se lungeasca toata latimea
+

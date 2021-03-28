@@ -1,0 +1,94 @@
+Password reset cind admin creaza user-ul
+Cind cream userul trimitem pe posta la user ca sa schimbe parola
+Setam mailul in failul.env:
+MAIL_MAILER=smpt
+.
+.
+.
+.
+MAIL_FROM_ADDRESS="noreplay@test.com"
+MAIL_FROM_NAME="${APP_NAME}"
+
+Restartam serverul ca sa se activeze cfg
+
+Folosim fortify, in FortifyServiceProvider.php cream resetPasswordView():
+Fortify::resetPasswordView(function($request) {
+  return view('auth.reset-password', ['request' => $request]);
+});
+$request - il folosim p-u a lua token-ul din url.
+
+In UserController.php metoda store trimitem pe mailul la user sa reseteze parola:
+public function store(StoreUserRequest $request)
+{
+  //$validatedData = $request->validated();  
+  //$user = User::create($validatedData);
+
+  $newUser = new CreateNewUser();  
+  $user = $newUser->create($request->only(['name', 'email', 'password', 'password_confirmation']));
+
+  $user->roles()->sync($request->roles);
+
+  Password::sendResetLink($request->only(['email']));
+
+  $request->session()->flash('success', 'You have created the user');
+
+  return redirect(route('admin.users.index'));
+}
+Acum cind cream user nou ar trebui sa se trimita email cu textul default Laravel, 
+in link-ul reset la urma este token-ul care noi o sa-l folosim. 
+Link-ul te redirictioneaza la view auth.reset-password, care noi am indicatm mai sus.
+Copiem register.blade.php si redenumim reset-password.blade.php si schimbam:
+{{ route('register') }} -> {{ url('reset-password') }}
+Stergem cimpul cu name
+Facem hidden input cu token-ul care l-am transmis: <input type="hidden" name="token" value="{{ $request->token }}">
+Deoarece emailul se trimite in url, atunci noi il luam si populam cimpul email: value="{{ $request->email }}" 
+
+Acum in forma schimbam parola dorita, ne redirectioneaza la login unde introducem parola schimbata si ne logam.
+
+Facem flash message sa para ca parola s-a resetat cu success in pagina Login, la fortify(trimite automat) status este ca success in mod obisnuit.
+In blade scrim:
+@if(session('status'))
+  <div>{{ session('status') }}</div>
+@endif
+
+Password reset cind userul uita parola
+P-u eceasta cream un link p-u resetarea parolei in login.blade.php:
+<a href="{{ route('password.request') }}">Forgotten your password? Reset it here</a>
+route('password.request') - o ofera fortify
+
+In FortifyServiceProvider.php indicam blade view:
+Fortify::requestPasswordResetLinkView(function() {
+  return view('auth.forgot-password');
+});
+
+Copiem login.blade.php si redenumim in forgot-password.blade.php si schimbam:
+{{ route('login') }} -> {{ route('password.email') }} - oferita de fortify
+Stergem cimpul password(ramine numai email)
+Stergem link-ul Forgot password
+Cind facem submit, ne trimite un email cu link-ul reset password si se face procedura ca mai sus.
+
+
+Email verification
+In fortify.php facem uncomment la Features::emailVerification()
+In User.php importam interfata: use Illuminate\Contracts\Auth\MustVerify\Email
+class User extends Authenticatable implements MustVerify\Email
+{
+  
+}
+Cind cream un user nou ne trimite email, unde accesam link-ul si ne redirectioneaza la home page 
+si in baza de date se completeaza automat cu data cimpul email_verified_at.
+Fortify creaza automat middleware verified, care o aplicam unde dorim.
+Cind nu este acces la vre-o ruta protejata trebuie sa facem p-u redirectionare un blade.
+In FortifyServiceProvider.php:
+Fortify::verifyEmailView(function() {
+  return view('auth.verify-email');
+});
+Cream acest blade, verify-email.blade.php
+Aici p-u siguranta mai punem odata sa trimata link-ul cu email verification:
+<form method="POST" action="{{ route('verification.send') }}">
+  @csrf
+  <button type="submit">Resend verification email</email>  
+</form>
+route('verification.send') - ne ofera fortify
+De asemenea fortify ne trimita flash message(status), noi in blade putem sa o folosi
+

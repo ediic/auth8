@@ -1,0 +1,617 @@
+php artisan make:model Post -rcmf
+
+---
+Auth::routes([
+	'register' => false
+]);
+
+@if (Route::has('register'))
+      <li class="nav-item">
+          <a class="nav-link" href="{{ route('register') }}">{{ __('Register') }}</a>
+      </li>
+@endif
+
+-----
+protected $guarded = [];
+
+-----
+asset('storage/' . $item->image)
+
+-----
+@section('title', 'Edit Details')
+
+----
+{{ old('name') ?? $customer->name }}
+
+-----
+{{ config('app.name') }}
+
+
+
+*********************
+php artisan make:controller \\Admin\\UsersController -r -m User
+
+Route::resource('/admin/users', 'Admin\UsersController', ['except' => ['show', 'create', 'store']]);
+
+Route::namespace('Admin')->prefix('admin')->name('admin.')->group(function(){
+	Route::resource('/users', 'UsersController', ['except' => ['show', 'create', 'store']]);
+});
+
+
+-app.blade:
+           <a class="dropdown-item" href="{{ route('admin.users.index') }}">
+                 User Management
+           </a>
+
+
+-UsersController:
+    public function index()
+    {
+        $users = User::all();
+        return view('admin.users.index')->with('users', $users);    
+    }
+
+
+-index.blade:
+                <div class="card-body">
+                    @foreach($users as $user)
+                        {{ $user->name }} - {{ $user->email }}
+                    @endforeach
+                </div>
+
+
+php artisan make:model Role -m
+
+Schema::create('roles', function (Blueprint $table) {
+            $table->id();
+            $table->string('role');
+            $table->timestamps();
+        });
+
+
+php artisan make:migration create_role_user_table
+
+
+Schema::create('role_user', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('role_id')->constrained('roles')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+            $table->timestamps();
+        });
+
+
+php artisan migrate
+
+
+-Role Model
+public function users()
+    {
+    	return $this->belongsToMany('App\User');
+    }
+
+
+-User Model
+public function roles()
+    {
+        return $this->belongsToMany('App\Role');
+    }
+
+
+php artisan make:seed RolesTableSeeder
+
+
+-Roles Seeder
+use App\Role;
+public function run()
+    {
+        //Role::truncate();
+
+        Role::create(['role'=>'admin']);
+        Role::create(['role'=>'author']);
+        Role::create(['role'=>'user']);
+    }
+
+
+-Database Seeder
+public function run()
+    {
+        $this->call(RolesTableSeeder::class);
+    }
+
+
+php artisan make:seed UsersTableSeeder
+
+
+-Users Seeder
+use Illuminate\Support\Facades\Hash;
+use App\User;
+use App\Role;
+ public function run()
+    {
+        //User::truncate();
+        //DB::table('role_user')->truncate();
+
+        $adminRole = Role::where('role', 'admin')->first();
+        $authorRole = Role::where('role', 'author')->first();
+        $userRole = Role::where('role', 'user')->first();
+
+        $admin = User::create([
+        	'name' => 'Admin User',
+        	'email' => 'admin@admin.com',
+        	'password' => Hash::make('password')
+        ]);
+
+        $author = User::create([
+        	'name' => 'Author User',
+        	'email' => 'author@author.com',
+        	'password' => Hash::make('password')
+        ]);
+
+        $user = User::create([
+        	'name' => 'Generic User',
+        	'email' => 'user@user.com',
+        	'password' => Hash::make('password')
+        ]);
+
+        $admin->roles()->attach($adminRole);
+        $author->roles()->attach($authorRole);
+        $user->roles()->attach($userRole);
+    }
+
+    public function run()
+    {
+        User::create([
+            'name' => 'Admin User',
+            'email' => 'admin@admin.com',
+            'password' => Hash::make('password'),
+        ])->roles()->attach(Role::create(['role' => 'admin']));
+        
+        User::create([
+            'name' => 'Author User',
+            'email' => 'author@author.com',
+            'password' => Hash::make('password'),
+        ])->roles()->attach(Role::create(['role' => 'author']));
+        
+        User::create([
+            'name' => 'Generic User',
+            'email' => 'user@user.com',
+            'password' => Hash::make('password'),
+        ])->roles()->attach(Role::create(['role' => 'user']));;
+    }
+
+
+-Database Seeder
+public function run()
+    {
+        $this->call(UsersTableSeeder::class);
+    }
+
+
+php artisan db:seed
+
+
+-index.blade
+              <div class="card-body">
+                    
+                    <table class="table">
+                      <thead>
+                        <tr>
+                          <th scope="col">#</th>
+                          <th scope="col">Name</th>
+                          <th scope="col">Email</th>
+                          <th scope="col">Roles</th>
+                          <th scope="col">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @foreach($users as $user)
+                            <tr>
+                              <th scope="row">{{ $user->id }}</th>
+                              <td>{{$user->name}}</td>
+                              <td>{{$user->email}}</td>
+                              <td>{{ implode(',', $user->roles()->get()->pluck('name')->toArray()) }}</td>
+                              <td>
+                                <a href="{{ route('admin.users.edit', $user->id) }}"><button type="button" class="btn btn-primary">Edit</button></a>
+                                <a href="{{ route('admin.users.destroy', $user->id) }}"><button type="button" class="btn btn-warning">Delete</button></a>
+                              </td>
+                            </tr>
+                        @endforeach
+                      </tbody>
+                    </table>
+
+                </div>
+
+
+-UsersController
+use App\Roles;
+public function edit(User $user)
+    {
+        $roles = Role::all();
+
+        return view('admin.users.edit')->with([
+            'user' => $user,
+            'roles' => $roles
+        ]);
+    }
+
+
+-edit.blade
+            <div class="card">
+                <div class="card-header">Edit user {{ $user->name }}</div>
+
+                <div class="card-body">
+                    <form action="{{ route('admin.users.update', $user) }}" method="POST">
+                        @csrf
+                        @method('PUT')
+                        @foreach($roles as $role)
+                        <div class="form-check">
+                            <input type="checkbox" name="roles[]" value="{{ $role->id }}">
+                            <label>{{ $role->name }}</label>
+                        </div>
+                        @endforeach    
+                        <button type="submit" class="btn btn-primary">
+                            Update
+                        </button>
+                  </form>  
+                </div>
+            </div>
+
+
+-UsersController
+public function update(Request $request, User $user)
+    {
+        $user->roles()->sync($request->roles);
+
+        return redirect()->route('admin.users.index');
+    }
+
+
+-index.blade
+	      <div class="card-body">
+                    
+                    <table class="table">
+                      <thead>
+                        <tr>
+                          <th scope="col">#</th>
+                          <th scope="col">Name</th>
+                          <th scope="col">Email</th>
+                          <th scope="col">Roles</th>
+                          <th scope="col">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @foreach($users as $user)
+                            <tr>
+                              <th scope="row">{{ $user->id }}</th>
+                              <td>{{$user->name}}</td>
+                              <td>{{$user->email}}</td>
+                              <td>{{ implode(',', $user->roles()->get()->pluck('name')->toArray()) }}</td>
+                              <td>
+                                <a href="{{ route('admin.users.edit', $user->id) }}"><button type="button" class="btn btn-primary float-left">Edit</button></a>
+                                <form action="{{ route('admin.users.destroy', $user) }}" method="POST" class="float-left">
+                                  @csrf
+                                  @method('DELETE')
+                                  <button type="submit" class="btn btn-warning">Delete</button>
+                                </form>
+                              </td>
+                            </tr>
+                        @endforeach
+                      </tbody>
+                    </table>
+
+                </div>
+
+
+-UsersController
+public function destroy(User $user)
+    {
+        $user->roles()->detach();
+        $user->delete();
+
+        return redirect()->route('admin.users.index');
+    }
+
+
+-User Model
+public function hasAnyRoles($roles)
+    {
+        if ($this->roles()->whereIn('role', $roles)->first()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function hasRole($roles)
+    {
+        if ($this->roles()->where('role', $roles)->first()) {
+            return true;
+        }
+
+        return false;
+    }
+
+
+-AuthServiceProvider
+public function boot()
+    {
+        $this->registerPolicies();
+
+        Gate::define('edit-users', function($user)
+        {
+            return $user->hasRole('admin');
+        });  
+    }
+
+
+-UserController
+use Gate;
+public function edit(User $user)
+    {
+        if (Gate::denies('edit-users')) {
+            return redirect(route('admin.users.index'));
+        }
+
+        $roles = Role::all();
+
+        return view('admin.users.edit')->with([
+            'user' => $user,
+            'roles' => $roles
+        ]);
+    }
+
+-AuthServiceProvider
+public function boot()
+    {
+        $this->registerPolicies();
+
+        Gate::define('edit-users', function($user)
+        {
+            return $user->hasRole('admin');
+        });
+
+        Gate::define('delete-users', function($user)
+        {
+            return $user->hasRole('admin');
+        });
+    }
+
+
+-UserController
+public function destroy(User $user)
+    {
+        if (Gate::denies('delete-users' || Auth::user()->id == $user->id)) {
+            return redirect(route('admin.users.index'));
+        }
+        
+        $user->roles()->detach();
+        $user->delete();
+
+        return redirect()->route('admin.users.index');
+    }
+
+
+-AuthServiceProvider
+public function boot()
+    {
+        $this->registerPolicies();
+
+        Gate::define('manage-users', function($user)
+        {
+            return $user->hasAnyRoles(['admin', 'author']);
+        });
+        
+        Gate::define('edit-users', function($user)
+        {
+            return $user->hasRole('admin');
+        });
+
+        Gate::define('delete-users', function($user)
+        {
+            return $user->hasRole('admin');
+        });
+    }
+
+
+-web Route
+Route::namespace('Admin')->prefix('admin')->name('admin.')->middleware('can:manage-users')->group(function(){
+	Route::resource('/users', 'UsersController', ['except' => ['show', 'create', 'store']]);
+});
+
+
+php artisan migrate:fresh
+php artisan db:seed         - pentru a repopula user-ii
+
+
+-index.blade
+                      <tbody>
+                        @foreach($users as $user)
+                            <tr>
+                              <th scope="row">{{ $user->id }}</th>
+                              <td>{{$user->name}}</td>
+                              <td>{{$user->email}}</td>
+                              <td>{{ implode(',', $user->roles()->get()->pluck('name')->toArray()) }}</td>
+                              <td>
+                                @can('edit-users')
+                                <a href="{{ route('admin.users.edit', $user->id) }}"><button type="button" class="btn btn-primary float-left">Edit</button></a>
+                                @endcan
+                                @can('delete-users')
+                                <form action="{{ route('admin.users.destroy', $user) }}" method="POST" class="float-left">
+                                  @csrf
+                                  @method('DELETE')
+                                  <button type="submit" class="btn btn-warning">Delete</button>
+                                </form>
+                                @endcan
+                              </td>
+                            </tr>
+                        @endforeach
+                      </tbody>
+
+
+
+-AuthServiceProvider
+Gate::define('edit-users', function($user)
+        {
+            return $user->hasAnyRoles(['admin', 'author']);
+        });
+
+
+-app.blade
+				   @can('manage-users')
+                                    <a class="dropdown-item" href="{{ route('admin.users.index') }}">
+                                        User Management
+                                    </a>
+                                    @endcan
+
+
+-edit.blade
+                            <input type="checkbox" name="roles[]" value="{{ $role->id }}"
+                                @if ($user->roles->pluck('id')->contains($role->id)) checked @endif>
+                            <label>{{ $role->name }}</label>
+
+
+-edit.blade
+                 <div class="card-header">Edit user {{ $user->name }}</div>
+
+                    <div class="card-body">
+                        <form action="{{ route('admin.users.update', $user) }}" method="POST">
+                            <div class="form-group row">
+                                <label for="email" class="col-md-2 col-form-label text-md-right">Email</label>
+
+                                <div class="col-md-6">
+                                    <input id="email" type="email" class="form-control @error('email') is-invalid @enderror" name="email" value="{{ $user->email }}" required autocomplete="email" autofocus>
+
+                                    @error('email')
+                                        <span class="invalid-feedback" role="alert">
+                                            <strong>{{ $message }}</strong>
+                                        </span>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="form-group row">
+                                <label for="name" class="col-md-2 col-form-label text-md-right">Name</label>
+
+                                <div class="col-md-6">
+                                    <input id="name" type="text" class="form-control @error('name') is-invalid @enderror" name="name" value="{{ $user->name }}" required autofocus>
+
+                                    @error('name')
+                                        <span class="invalid-feedback" role="alert">
+                                            <strong>{{ $message }}</strong>
+                                        </span>
+                                    @enderror
+                                </div>
+                            </div>
+                            
+                            @csrf
+                            @method('PUT')
+                            
+                            <div class="form-group row">
+                                <label for="roles" class="col-md-2 col-form-label text-md-right">Roles</label>
+                                <div class="col-md-6">
+                                    @foreach($roles as $role)
+                                        <div class="form-check">
+                                            <input type="checkbox" name="roles[]" value="{{ $role->id }}"
+                                                @if ($user->roles->pluck('id')->contains($role->id)) checked @endif>
+                                            <label>{{ $role->name }}</label>
+                                        </div>
+                                    @endforeach
+                                </div>    
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                Update
+                            </button>
+                      </form>  
+                    </div>
+
+                </div>
+
+
+
+-UserController
+public function update(Request $request, User $user)
+    {
+        $user->roles()->sync($request->roles);
+
+        $user->name = $request->name;
+        $user->email = $request->email;
+        $user->save();
+
+        return redirect()->route('admin.users.index');
+    }
+
+
+-RegisterController
+use App\Role;
+protected function create(array $data)
+    {
+        $user =  User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ]);
+
+        $role = Role::select('id')->where('name', 'user')->first();
+
+        $user->roles()->attach($role);
+
+        return $user;
+    }
+
+
+-partials.alerts
+@if (session('success'))
+	<div class="alert alert-success" role="alert">
+	  {{ session('success') }}
+	</div>
+@endif
+@if (session('warning'))
+	<div class="alert alert-warning" role="alert">
+	  {{ session('warning') }}
+	</div>
+@endif
+@if (session('error'))
+	<div class="alert alert-danger" role="alert">
+	  {{ session('error') }}
+	</div>
+@endif
+
+
+-@include('partials.alerts') -> app.blade
+
+
+-UserController
+public function update(Request $request, User $user)
+    {
+        $user->roles()->sync($request->roles);
+
+        $user->name = $request->name;
+        $user->email = $request->email;
+        
+        if ($user->save()) {
+            $request->session()->flash('success', $user->name . ' has been updated');
+        }else {
+            $request->session()->flash('error', 'There was an error updating the user');
+        }
+
+        return redirect()->route('admin.users.index');
+    }
+
+
+-LoginController
+use Illuminate\Support\Facades\Auth;
+public function redirectTo()
+    {
+        if (Auth::user()->hasRole('admin')) {
+            $this->redirectTo = route('admin.users.index');
+            return $this->redirectTo;
+        }
+
+        $this->redirectTo = route('home');
+        return $this->redirectTo;
+    }
+
+
+
+

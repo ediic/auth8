@@ -1,0 +1,226 @@
+php artisan make:provider RiakServiceProvider
+
+<?php
+
+namespace App\Providers;
+
+use App\Services\Riak\Connection;
+use Illuminate\Support\ServiceProvider;
+
+class RiakServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     *
+     * @return void
+     */
+    public function register()
+    {
+        $this->app->singleton(Connection::class, function ($app) {
+            return new Connection(config('riak'));
+        });
+    }
+}
+
+All service providers are registered in the config/app.php configuration file
+'providers' => [
+    // Other Service Providers
+
+    App\Providers\RiakServiceProvider::class,
+],
+
+_______
+php artisan make:provider ProductServiceProvider
+This will create new file ProductServiceProvider.php under app/providers.
+
+The content of this file will be looks like :
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+
+class ProductServiceProvider extends ServiceProvider
+{
+    /**
+     * Bootstrap the application services.
+     *
+     * @return void
+     */
+    public function boot()
+    {
+        //
+    }
+
+    /**
+     * Register the application services.
+     *
+     * @return void
+     */
+    public function register()
+    {
+        //
+    }
+}
+Here, we have created our first custom service provider Now add an entry in providers array under config/app.php file so that laravel loads this provider along with other providers during bootstrapping process.
+
+So open config/app.php file and append line App\Providers\ProductServiceProvider::class
+'providers' => [
+        App\Providers\ProductServiceProvider::class,
+],
+Till now we have created a custom service provider and added an entry on providers array. But still, our service provider doesn't do anything special here. it's just a blank template. So let's try to register class binding inside the register method.
+
+Open ProductServiceProvider.php file and update with below code :
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use App\Library\ProductClass;
+use App\Repositories\ProductRepository;
+
+class ProductServiceProvider extends ServiceProvider
+{
+    public function boot()
+    {
+    }
+
+    public function register()
+    {
+        $this->app->bind(ProductRepository::class, ProductClass::class);
+    }
+}
+In the register method, we've added our service container binding. So, whenever the App\Repositories\ProductRepository dependency needs to be resolved, it'll call the closure function, and it returns the instance of App\Library\ProductClass class.
+
+Let's create ProductRepository and ProductClass :
+
+App\Repositories\ProductRepository.php
+<?php
+
+namespace App\Repositories;
+
+Interface ProductRepository
+{
+    public function listAll();
+}
+App\Library\ProductClass.php
+<?php
+
+namespace App\Library;
+
+use App\Repositories\ProductRepository;
+use App\Models\Products;
+
+class ProductClass implements ProductRepository
+{
+    public function listAll()
+    {
+        return Products::all();
+    }
+}
+So we have ProductClass and ProductRepository class created. Now inject dependency somewhere on a controller.
+
+For that, create Controller and put below code inside it :
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Repositories\ProductRepository;
+
+class ProductController extends Controller
+{
+    protected $prodRepository;
+
+    public function __construct(ProductRepository $prodRepository)
+    {
+        $this->prodRepository = $prodRepository;
+    }
+
+    public function index()
+    {
+        $products = $this->prodRepository->listAll();
+        return view('prodducts.list',['products'=>$products]);
+    }
+}
+
+_______
+You might know, Laravel provides an artisan command to create service provider.
+
+| php artisan make:provider MyServiceProvider |
+
+This command will create a service provider at App/Providers/ directory 
+
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+
+class MyServiceProvider extends ServiceProvider
+{
+    /**
+    * Register any application services.
+    *
+    * @return void
+    */
+    public function register()
+    {
+        //
+    }
+
+    /**
+    * Bootstrap any application services.
+    *
+    * @return void
+    */
+    public function boot()
+    {
+        //
+    }
+}
+
+It is very important to know the fact that register() method allows us to define bindings to our service container. For instance, see code below.
+
+public function register()
+{
+    $this->app->singleton(my_class, function ($app) {
+        return new MyClass($app);
+    });
+}
+
+$this->app : This is a global variable available in laravel through which we can access internal settings of the application.
+singleton:   It is a trait, taken from Ruby module. When used this trait, we tell our application that whatever class it is given as parameter, it should have only one instance through out the application. Here MyClass will be resolved once and will have only one instance which can be accessed via my_class. Thus, it’s unnecessary to instantiate multiple copies of this class.
+
+In boot(), we can access all the services which are registered in register() method, and most importantly, view composer is registered   in boot method only.
+    /**
+    * Bootstrap any application services.
+    *
+    * @return void
+    */
+    public function boot()
+    {
+        View::composer(
+                'dummy, 'App\Http\ViewComposers\MyComposer'
+        );
+
+    }
+
+Or we can explicitly bind a model.
+
+public function boot()
+{
+    parent::boot();
+
+    Route::model('user', App\User::class);
+}
+
+register a service provider
+'providers' => [
+
+        /*
+        * Application Service Providers...
+    */
+    App/Providers/MyServiceProvider::class
+]
+

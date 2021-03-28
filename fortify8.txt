@@ -1,0 +1,52 @@
+In mapa Fortify sind diferite actiuni, failuri.php
+Una din astea este CreateNewUser.php
+O folosim in UserController.php:
+public function store(StoreUserRequest $request)
+{
+  //$validatedData = $request->validated();  
+  //$user = User::create($validatedData);
+  
+  $newUser = new CreateNewUser();
+  $user = $newUser->create($request->only(['name', 'email', 'password', 'password_confirmation']));
+  //$user = $newUser->create($request->all());
+
+  $user->roles()->sync($request->roles);
+  $request->session()->flash('success', 'You have created the user');
+
+  return redirect(route('admin.users.index'));
+}
+Din User.php stergem mutatorul setPasswordAttribute(), din cauza ca codarea o face fortify,
+deci stergem metoda de mai jos:
+//public function setPasswordAttribute($password)
+//{
+//  $this->attributes['password'] = Hash::make($password);
+//}
+
+
+Facem update la user cu Fortify:
+php artisan make:controller User\Profile
+In Profile.php:
+public function __Invoke()
+{
+  return view('user.profile');
+}
+Cream ruta r-u aceast controller, in web.php
+Route::prefix('user')->middleware(['auth', 'verified'])->name('user.')->group(function() {
+  Route::get('profile', Profile::class)->name('profile');
+});
+Cream in blade link-ul:
+<a href="{{ route('user.profile') }}">Profile</a>
+Facem blade-ul unde ne trimite controller-ul, in mapa user facem profile.blade.php, 
+schimbam ruta in forma cu ruta care ne-o ofera fortify:
+<form method="POST" action="{{ route('user-profile-information.update') }}">
+  @csrf
+  @method("PUT")
+</form>
+Stergem cimpul cu password(cu password are actiune dedicata)
+Populam forma cu: 
+value="{{ auth() ->user()->name }}" 
+value="{{ auth() ->user()->email }}"
+Cind facem submit se petrece update si fortify ne ofera mesajul flash
+ 
+
+UpdateUserProfileinformation.php

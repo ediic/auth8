@@ -1,0 +1,366 @@
+P-u a folosi SASS in loc de PostCss in webpack.mix.js scrim:
+mix.js('resources/js/app.js', 'public/js')
+   .sass('resources/sass/app.scss', 'public/css');
+nu uitam sa cream resources/sass/app.scss si importam bootstrap:
+@import "~bootstrap/scss/bootstrap";
+rulam: npm run dev si verificam daca s-a compilat in public/css/app.css
+
+?Punem in HTML tagul:
+<meta name="csrf-token" content="{{csrf_token()}}">
+apoi includem css si js: <link href="{{asset('css/app.css')}}" rel="stylesheet">
+important cuvintul "defer" face ca js sa se incarce la sfirsitul paginii!!!
+<script src="{{asset('js/app.js')}}" defer></script>
+
+php artisan make:model Role -a, creaza model, factory, migration, seeder, controller
+In migration "create_roles_table" sub Schema::create():
+ $table->string('name');
+
+Cream tabela de legatura many to many:
+php artisan make:migration create_role_user_table
+In migration "create_role_user_table" sub Schema::create():
+ //$table->unsignedBigInteger('role_id');
+ //$table->unsignedBigInteger('user_id');
+Pentru siguranta adaugam si foreign
+ //$table->foreign('role_id')->references('id')->on('roles')->onDelete('cascade'); 
+ //$table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+Sau
+ $table->foreignId('role_id')->constrained()->onDelete('cascade');
+ $table->foreignId('user_id')->constrained()->onDelete('cascade');
+Cind se pune foreign kee constraint in fail separat in migration "create_role_user_table" sub down():
+  //Schema::table('role_user', function (Blueprint $table){
+    //$table->dropForeign('role_user_role_id_foreign');
+    //$table->dropForeign('role_user_user_id_foreign');
+  //})
+
+php artisan migrate
+
+Cream dependenta, in model Role.php:
+public function users()
+{
+  return $this->belongsToMany('App\Models\User');
+}
+In model User.php:
+public function roles()
+{
+  return $this->belongsToMany('App\Models\Role');
+}
+
+php artisan make:seeder UserSeeder
+
+In UserSeeder.php:
+public function run()
+{
+  User::factory()->times(10)->create();
+}                           ->make() - creaza dar nu salveaza in DB
+In RoleSeeder.php facem hardcode:(sa nu uitam sa importam DB)
+public function run()
+{
+  DB::table('roles')->insert([
+    'name' => 'Admin'
+  ]);
+
+  DB::table('roles')->insert([
+    'name' => 'Author'
+  ]);
+
+  DB::table('roles')->insert([
+    'name' => 'User'
+  ]);
+}
+In DatabaseSeeder.php(se face seed p-u toate modelele)
+public function run()
+{
+  $this->call(UserSeeder::class);
+  $this->call(RoleSeeder::class);
+}
+
+php artisan db:seed
+//php artisan db:seed --class=RoleSeeder - seed numai la un model
+
+//php artisan migrate:refresh --seed - refresh si la seed
+
+php artisan make:seeder RoleUserSeeder
+In RoleUserSeeder.php:
+public function run()
+{
+  $roles = Role::all();
+
+  User::all()->each(function ($user) use($roles){
+    $user->roles()->attach(
+      $roles->random(1)->pluck('id')
+    );  
+  });  
+}
+In DatabaseSeeder.php se adauga
+public function run()
+{
+  $this->call(UserSeeder::class);
+  $this->call(RoleSeeder::class);
+  $this->call(RoleUserSeeder::class);
+}
+
+php artisan migrate:refresh --seed
+
+php artisan make:controller Admin\\UserController -r
+
+In web.php:
+Route::resource('/admin/users', UserController::class);
+
+php artisan route:list
+
+Optimizam rutele admin:
+Route::prefix('admin')->name('admin.')->group(function (){
+  Route::resource('/users', UserController::class);
+});
+
+In HTML p-u delete:
+<button type="button" 
+  onclick="event.preventDefault();
+  document.getElementById('delete-user-form-{{ $user->id }}').submit()">
+  Delete
+</button>
+
+<form id="delete-user-form-{{ $user->id }}" action="{{ route('admin.users.destroy', $user->id) }}" method="POST" style="display: none">
+  @csrf
+  @method("DELETE")
+</form>
+
+P-u paginate:
+public function index()
+{
+  return view('admin.users.index', ['users' => User::paginate(10)]);
+}
+In HTML:
+{{ $users->links() }}
+Ca sa se aplice stilurile p-u paginator in AppServiceProvider.php:
+public function boot()
+{
+  Paginator::useBootstrap();
+}
+
+Assign roles to users
+php artisan migrate:refresh --seed
+P-u a atribui mai multe roluri p-u un user, in HTML:
+@foreach($roles as $role)
+  <input name="roles[]" type="checkbox" value="{{ $role->id }}" id="{{ $role->name }}">
+  <label for="{{ $role->name" }}>{{ $role->name }}</label> 
+@endforeach
+In UserController.php:
+public function store(Request $request)
+{
+  $user = User::create($request->except('_token', 'roles')); - o sa primim eroare ca trebuie sa salvam cu relatie
+}
+Mai intii facem ca parola sa fie codata prin mutator, in User.php:
+public function setPasswordAttribute($password)
+{
+  $this->attributes['password'] = Hash::make($password);
+}
+Iarasi in UserController.php:
+In UserController.php:
+public function store(Request $request)
+{
+  $user = User::create($request->except('_token', 'roles')); - o sa primim eroare ca trebuie sa salvam cu relatie
+  
+  $user->roles()->sync($request->roles); - sync se foloseste cind salvam un array
+
+  return redirect(route('admin.users.index'));
+}
+Ca sa nu facem de multe ori forma, facem un fail nou cu forma html, apoi cu @include('admin.users.partials.form') 
+o plasam in html-ul care avem nevoie.
+In UserController.php:
+public function edit($id)
+{
+  return view('admin.users.edit', 
+  [
+    'roles' => Role::all(),
+    'user' =>  User::find($id) 
+  ]);
+}	
+P-u a fi prepopulata forma in html facem:
+<input name="name" type="text" class="@error('name') is-invalid @enderror" id="name"
+value="{{ old('name') }} @isset($user)  {{ $user->name }} @endisset"> 
+@error('name')
+  <span role="alert">
+    {{ $message }}
+  </span>
+@enderror
+Respectiv facem la email s.a.
+P-u a transmite o variabila in html partial:
+@include('admin.users.partials.form', ['create' => true])
+Apoi in partial putem sa o folosim p-u a afisa un cimp sau nu:
+@isset($create)
+ <input name="password" type="password">
+@endisset
+P-u a popula si rolurile la edit:
+@foreach($roles as $role)
+  <input name="roles[]" type="checkbox" value="{{ $role->id }}" id="{{ $role->name }}" 
+  @isset($user) @if(in_array($role->id, $user->roles->pluck('id')->toArray())) checked @endif @endisset>
+  <label for="{{ $role->name" }}>{{ $role->name }}</label> 
+@endforeach
+Apoi in UserController.php:
+public function update(Request $request, $id)
+{
+  $user = User::findOrFail($id);
+  $user->update($request->except(['_token', 'roles']));
+  $user->roles()->sync($request->roles);
+  
+  return redirect(route('admin.users.index')); 
+}
+
+Flash messages:
+@if(session('success'))
+  <div role="alert">{{ session('success') }}
+@endif
+In userController.php":
+public function destroy($id, Request $request)
+{
+  User::destroy($id);
+  $request->session()->flash('success', 'You have deleted the user');
+  
+  return redirect(route('admin.users.index')); 
+}
+Facem aceasta p-u store ...
+
+Validate data, in UserController:
+public function store(Request $request)
+{
+  $validatedData = $request->validate([
+    'name' => 'required|max:255',
+    'email' => 'required|max:255|unique:users', - emailul sa fie unic in tabela User
+    'password' => 'required|min:8|max:255'
+  ]);  
+
+  $user = User::create($validatedData);
+  
+  $user->roles()->sync($request->roles);
+  $request->session()->flash('success', 'You have created the user');
+
+  return redirect(route('admin.users.index'));
+}
+
+Ca sa scrim regulile p-u validate in alta parte facem un fail request:
+php artisan make:request StoreUserRequest 
+In failul StoreUserRequest.php:
+public function rules()
+{
+  return[
+    'name' => 'required|max:255',
+    'email' => 'required|max:255|unique:users',
+    'password' => 'required|min:8|max:255'
+  ]; 
+}
+Si in UserController.php schimbam Request -> StoreUserRequest si validate() in validated():
+public function store(StoreUserRequest $request)
+{
+  $validatedData = $request->validated();  
+
+  $user = User::create($validatedData);
+  
+  $user->roles()->sync($request->roles);
+  $request->session()->flash('success', 'You have created the user');
+
+  return redirect(route('admin.users.index'));
+}
+In StoreUserRequest.php mai schimbam in authorize() return false -> true;
+
+Gates
+Inregistram gate-urile in AuthServiceProvider.php:
+public function boot()
+{
+  $this->registerPolicies();
+
+  Gate::define('logged-in', function($user){
+    return $user;
+  });
+}
+Ca sa verificam in UserController.php:
+public function index()
+{
+  if(Gate::denies('logged-in')){
+    dd('no access allowed');
+  }
+}
+In Html ca sa se afiseze sau nu niste rinduri facem:
+@can('logged-in')
+  <div>Tralala</div>
+@endcan
+
+In web.php folosim middleware auth, care vine out of the box(se afla in Kernel.php), middleware ruleaza inaintea la orice request,
+protejam paginile de cei care nu-s autentificati, te redirectioneaza la login page:
+Route::prefix('admin')->middleware('auth')->name('admin.')->group(function (){
+  Route::resource('/users', UserController::class);
+});
+
+Protecting pages with roles
+In User.php cream metodele hasAnyRole() si hasAnyRoles();
+public function hasAnyRole(string $role)
+{
+  return null !==$this->roles()->where('name', $role)->first();
+}
+public function hasAnyRoles(array $role)
+{
+  return null !==$this->roles()->whereIn('name', $role)->first();
+}
+Apoi in AuthServiceProvider.php facem un gate nou:
+public function boot()
+{
+  $this->registerPolicies();
+
+  Gate::define('logged-in', function($user){
+    return $user;
+  });
+
+  Gate::define('is-admin', function($user){
+    return $user->hasAnyRole('admin');
+  });
+}
+Aplicam acest gate in UserController.php:
+public function index()
+{
+  if(Gate::denies('logged-in')){
+    dd('no access allowed');
+  }
+
+  if(Gate::allows('is-admin')){
+    return view('admin.users.index', ['users' => User::paginate(10)]);
+  }
+}
+La fel putem folosi in html:
+@can('is-admin')
+  tralala
+@endcan
+La fel putem folosi si cealalalta metoda hasAnyRoles(), in AuthServiceProvider.php:
+public function boot()
+{
+  $this->registerPolicies();
+
+  Gate::define('logged-in', function($user){
+    return $user;
+  });
+
+  Gate::define('is-admin', function($user){
+    return $user->hasAnyRole('admin');
+    //return $user->hasAnyRoles(['admin', 'author']);
+  });
+}
+
+Facem middleware si bagam gate-ul acolo:
+php artisan make:middleware AccessAdmin
+In AccessAdmin.php:
+public function handle(Request $request, Closure $next)
+{
+  if(Gate::allows('is-admin')){
+    return $next($request);
+  }
+
+  return redirect('/');
+}
+Ne ducem in Kernel.php si inregistram middleware:
+protected $routeMiddleware = [
+  'auth.isAdmin' => \App\Http\Middleware\AccessAdmin::class,
+];
+Si stergem acest gate din functia index din UserController.php
+In web.php adaugam si middleware auth.isAdmin:
+Route::prefix('admin')->middleware(['auth', 'auth.isAdmin'])->name('admin.')->group(function (){
+  Route::resource('/users', UserController::class);
+});

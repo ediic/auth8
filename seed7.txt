@@ -1,0 +1,44 @@
+-factory class
+$factory->define(\App\Customer::class, function(Faker $faker){
+	return [
+	    'company_id' => factory(Company::class)->create(),  //se pune automat id-ul la Company
+	    'name' => $faker->name,
+	];
+});
+
+
+-seeder class
+factory(\App\Customer::class, 3)->create();
+
+:composer dump-autoload
+
+--
+$user = factory(User::class)->create();
+$phone = new Phone();
+$phone->phone = '12-43-76';
+$user->phone()->save($phone); 
+
+--
+$user = factory(User::class)->create();
+
+$user->phone()->create([
+		'phone' => '22-33-44'
+	]);
+
+
+--function Run()
+factory(User::class, 10)->create()->each(function($user){
+	factory(Post::class, 10)->create([
+		'user_id' => $user->id,	
+	]);
+});
+
+
+---Gate
+Gate::define('view-post', function($user, $post)){
+	return $user->id === $post->user->id;
+}
+
+in view
+@can('view-post', $post)
+@endcan
